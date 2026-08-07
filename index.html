@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pikl — Pickomino Monte Carlo Simulator</title>
+<title>Pikl — Simulateur Monte Carlo Pickomino</title>
 <style>
   :root {
     --bg: #1a1a2e; --surface: #16213e; --accent: #e94560;
@@ -54,43 +54,43 @@
 </style>
 </head>
 <body>
-<h1>🪱 Pikl — Pickomino Simulator</h1>
-<p class="subtitle">Monte Carlo strategy comparison · <a href="https://github.com/kelu124/pikl" target="_blank">kelu124/pikl</a></p>
+<h1>🪱 Pikl — Simulateur Pickomino</h1>
+<p class="subtitle">Comparaison de stratégies par Monte Carlo · <a href="https://github.com/kelu124/pikl" target="_blank">kelu124/pikl</a></p>
 
 <div class="card">
   <h2>Configuration</h2>
   <div class="grid">
     <div>
-      <label>Strategies to compare (pick 2–6)</label>
+      <label>Stratégies à comparer (choisir 2 à 6)</label>
       <div class="strategy-picks" id="stratPicks"></div>
     </div>
     <div>
-      <label>Players per game: <span id="playersVal">4</span></label>
+      <label>Joueurs par partie : <span id="playersVal">4</span></label>
       <input type="range" id="players" min="2" max="6" value="4">
     </div>
     <div>
-      <label>Simulations</label>
+      <label>Nombre de simulations</label>
       <select id="nGames">
-        <option value="500">500 (fast)</option>
+        <option value="500">500 (rapide)</option>
         <option value="2000" selected>2 000</option>
-        <option value="10000">10 000 (slow)</option>
-        <option value="50000">50 000 (very slow)</option>
+        <option value="10000">10 000 (lent)</option>
+        <option value="50000">50 000 (très lent)</option>
       </select>
     </div>
   </div>
-  <button id="run">Run simulation</button>
+  <button id="run">Lancer la simulation</button>
   <div id="progress"></div>
 </div>
 
 <div class="card" id="results">
-  <h2>Results</h2>
+  <h2>Résultats</h2>
   <table id="resultTable">
     <thead><tr>
-      <th>Strategy</th>
-      <th>Win rate</th>
+      <th>Stratégie</th>
+      <th>Taux de victoire</th>
       <th class="bar-cell"></th>
-      <th>Avg worms</th>
-      <th>Bust rate</th>
+      <th>Vers moy.</th>
+      <th>Taux d'échec</th>
     </tr></thead>
     <tbody id="resultBody"></tbody>
   </table>
@@ -98,16 +98,31 @@
 </div>
 
 <div class="card">
-  <h2>Strategy reference</h2>
+  <h2>Référence des stratégies</h2>
   <table>
-    <thead><tr><th>Name</th><th>Description</th></tr></thead>
+    <thead><tr><th>Nom</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td>Greedy</td><td>Always pick the face with the highest pip gain. Roll until bust.</td></tr>
-      <tr><td>Safe</td><td>Secure a WORM first, then stop with ≤3 dice remaining and a valid sum.</td></tr>
-      <tr><td>Target-21</td><td>Stop as soon as sum ≥ 21 with a WORM secured.</td></tr>
-      <tr><td>Adaptive-25</td><td>Stop when sum ≥ 25 with a WORM. Balance of risk/reward.</td></tr>
-      <tr><td>Adaptive-28</td><td>Stop when sum ≥ 28 with a WORM. Mid-range aggression.</td></tr>
-      <tr><td>Adaptive-31</td><td>Stop when sum ≥ 31 with a WORM. Aims for the top tier.</td></tr>
+      <tr><td>Greedy</td><td>Toujours choisir la face rapportant le plus de points. Relancer jusqu'à l'échec.</td></tr>
+      <tr><td>Safe</td><td>Sécuriser un VER en premier, puis s'arrêter avec ≤ 3 dés restants si la somme est valide.</td></tr>
+      <tr><td>Cible-21</td><td>S'arrêter dès que la somme ≥ 21 avec un VER sécurisé.</td></tr>
+      <tr><td>Adaptatif-25</td><td>S'arrêter quand la somme ≥ 25 avec un VER. Bon équilibre risque/récompense.</td></tr>
+      <tr><td>Adaptatif-28</td><td>S'arrêter quand la somme ≥ 28 avec un VER. Agressivité modérée.</td></tr>
+      <tr><td>Adaptatif-31</td><td>S'arrêter quand la somme ≥ 31 avec un VER. Vise les tuiles hautes.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Règles du jeu</h2>
+  <table>
+    <thead><tr><th>Élément</th><th>Détail</th></tr></thead>
+    <tbody>
+      <tr><td>Dés</td><td>8 dés, faces : 1 · 2 · 3 · 4 · 5 · 🪱 (VER = 5 points)</td></tr>
+      <tr><td>Tuiles</td><td>21–36 · tuiles 21–24 = 1 ver · 25–28 = 2 vers · 29–32 = 3 vers · 33–36 = 4 vers</td></tr>
+      <tr><td>Tour</td><td>Lancer tous les dés → mettre de côté une valeur → relancer → répéter ou s'arrêter</td></tr>
+      <tr><td>Condition</td><td>Au moins un VER mis de côté pour prendre une tuile</td></tr>
+      <tr><td>Vol</td><td>Si votre somme correspond exactement à la tuile du dessus d'un adversaire, volez-la</td></tr>
+      <tr><td>Échec</td><td>Vous perdez votre tuile du dessus · la tuile centrale la plus haute est retirée définitivement</td></tr>
     </tbody>
   </table>
 </div>
@@ -116,6 +131,10 @@
 <script>
 const STRAT_KEYS = Object.keys(STRATEGIES);
 const picks = new Set(['Greedy', 'Safe', 'Adaptive28']);
+const STRAT_LABELS = {
+  Greedy: 'Greedy', Safe: 'Safe', Target21: 'Cible-21',
+  Adaptive25: 'Adaptatif-25', Adaptive28: 'Adaptatif-28', Adaptive31: 'Adaptatif-31'
+};
 
 function buildChips() {
   const container = document.getElementById('stratPicks');
@@ -123,7 +142,7 @@ function buildChips() {
   STRAT_KEYS.forEach(k => {
     const chip = document.createElement('div');
     chip.className = 'strategy-chip' + (picks.has(k) ? ' active' : '');
-    chip.textContent = STRATEGIES[k].name;
+    chip.textContent = STRAT_LABELS[k] || k;
     chip.addEventListener('click', () => {
       if (picks.has(k) && picks.size > 2) { picks.delete(k); chip.classList.remove('active'); }
       else if (!picks.has(k) && picks.size < 6) { picks.add(k); chip.classList.add('active'); }
@@ -141,19 +160,17 @@ document.getElementById('run').addEventListener('click', async () => {
   const btn = document.getElementById('run');
   const progress = document.getElementById('progress');
   btn.disabled = true;
-  progress.textContent = 'Running…';
+  progress.textContent = 'Calcul en cours…';
 
   const nGames = +document.getElementById('nGames').value;
   const nPlayers = +document.getElementById('players').value;
 
   const stratKeys = [...picks];
-  // Pad or rotate strategies to fill nPlayers seats
   const playerStrats = [];
   for (let i = 0; i < nPlayers; i++) playerStrats.push(STRATEGIES[stratKeys[i % stratKeys.length]]);
 
-  await new Promise(r => setTimeout(r, 20)); // let UI breathe
+  await new Promise(r => setTimeout(r, 20));
 
-  // Run in chunks so the page doesn't freeze
   const chunkSize = 200;
   const allResults = playerStrats.map(() => ({ wins: 0, totalWorms: 0, totalBusts: 0, totalTurns: 0 }));
   let gamesRun = 0;
@@ -180,10 +197,9 @@ document.getElementById('run').addEventListener('click', async () => {
 
   while (gamesRun < nGames) {
     await chunk();
-    progress.textContent = `Running… ${Math.round(gamesRun / nGames * 100)}%`;
+    progress.textContent = `Calcul en cours… ${Math.round(gamesRun / nGames * 100)} %`;
   }
 
-  // Aggregate by strategy name (multiple seats may share a strategy)
   const aggByName = {};
   playerStrats.forEach((s, i) => {
     const n = s.name;
@@ -210,19 +226,19 @@ document.getElementById('run').addEventListener('click', async () => {
     if (i === 0) tr.className = 'winner';
     const pct = (+r.winRate / maxWinRate * 100).toFixed(1);
     tr.innerHTML = `
-      <td>${r.name}</td>
-      <td>${r.winRate}%</td>
+      <td>${STRAT_LABELS[Object.keys(STRAT_LABELS).find(k => STRATEGIES[k]?.name === r.name)] || r.name}</td>
+      <td>${r.winRate} %</td>
       <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill${i===0?' green':''}" style="width:${pct}%"></div></div></td>
       <td>${r.avgWorms} 🪱</td>
-      <td>${r.bustRate}%</td>
+      <td>${r.bustRate} %</td>
     `;
     tbody.appendChild(tr);
   });
 
   document.getElementById('resultMeta').textContent =
-    `${nGames.toLocaleString()} games · ${nPlayers} players · strategies rotate across seats`;
+    `${nGames.toLocaleString()} parties · ${nPlayers} joueurs · les stratégies tournent entre les sièges`;
   document.getElementById('results').style.display = '';
-  progress.textContent = 'Done.';
+  progress.textContent = 'Terminé.';
   btn.disabled = false;
 });
 </script>
