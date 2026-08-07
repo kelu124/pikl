@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pikl — Pickomino Monte Carlo Simulator</title>
+<style>
+  :root {
+    --bg: #1a1a2e; --surface: #16213e; --accent: #e94560;
+    --text: #eaeaea; --muted: #888; --border: #2a2a4a;
+    --green: #4caf50; --yellow: #ffc107;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; padding: 2rem; min-height: 100vh; }
+  h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: .25rem; }
+  .subtitle { color: var(--muted); font-size: .9rem; margin-bottom: 2rem; }
+  .subtitle a { color: var(--yellow); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--yellow); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+  label { font-size: .85rem; color: var(--muted); display: block; margin-bottom: .3rem; }
+  select, input[type=range], input[type=number] {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px; padding: .4rem .6rem; font-size: .9rem;
+  }
+  .strategy-picks { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+  .strategy-chip {
+    display: inline-flex; align-items: center; gap: .4rem;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 20px; padding: .3rem .8rem; font-size: .85rem; cursor: pointer;
+    transition: border-color .2s, color .2s;
+  }
+  .strategy-chip.active { border-color: var(--accent); color: var(--accent); }
+  .strategy-chip input { display: none; }
+  button#run {
+    background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: .7rem 2rem; font-size: 1rem; cursor: pointer; margin-top: .5rem;
+    transition: opacity .2s;
+  }
+  button#run:disabled { opacity: .5; cursor: not-allowed; }
+  #progress { margin-top: .8rem; color: var(--muted); font-size: .85rem; min-height: 1.2em; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: .5rem .7rem; border-bottom: 1px solid var(--border); }
+  td { padding: .55rem .7rem; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  .winner td:first-child::before { content: '🏆 '; }
+  .bar-cell { width: 35%; }
+  .bar-wrap { background: var(--border); border-radius: 3px; height: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .5s; }
+  .bar-fill.green { background: var(--green); }
+  #results { display: none; }
+  .meta { font-size: .78rem; color: var(--muted); margin-top: .5rem; }
+  @media (max-width: 600px) { body { padding: 1rem; } }
+</style>
+</head>
+<body>
+<h1>🪱 Pikl — Pickomino Simulator</h1>
+<p class="subtitle">Monte Carlo strategy comparison · <a href="https://github.com/kelu124/pikl" target="_blank">kelu124/pikl</a></p>
+
+<div class="card">
+  <h2>Configuration</h2>
+  <div class="grid">
+    <div>
+      <label>Strategies to compare (pick 2–6)</label>
+      <div class="strategy-picks" id="stratPicks"></div>
+    </div>
+    <div>
+      <label>Players per game: <span id="playersVal">4</span></label>
+      <input type="range" id="players" min="2" max="6" value="4">
+    </div>
+    <div>
+      <label>Simulations</label>
+      <select id="nGames">
+        <option value="500">500 (fast)</option>
+        <option value="2000" selected>2 000</option>
+        <option value="10000">10 000 (slow)</option>
+        <option value="50000">50 000 (very slow)</option>
+      </select>
+    </div>
+  </div>
+  <button id="run">Run simulation</button>
+  <div id="progress"></div>
+</div>
+
+<div class="card" id="results">
+  <h2>Results</h2>
+  <table id="resultTable">
+    <thead><tr>
+      <th>Strategy</th>
+      <th>Win rate</th>
+      <th class="bar-cell"></th>
+      <th>Avg worms</th>
+      <th>Bust rate</th>
+    </tr></thead>
+    <tbody id="resultBody"></tbody>
+  </table>
+  <p class="meta" id="resultMeta"></p>
+</div>
+
+<div class="card">
+  <h2>Strategy reference</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>Greedy</td><td>Always pick the face with the highest pip gain. Roll until bust.</td></tr>
+      <tr><td>Safe</td><td>Secure a WORM first, then stop with ≤3 dice remaining and a valid sum.</td></tr>
+      <tr><td>Target-21</td><td>Stop as soon as sum ≥ 21 with a WORM secured.</td></tr>
+      <tr><td>Adaptive-25</td><td>Stop when sum ≥ 25 with a WORM. Balance of risk/reward.</td></tr>
+      <tr><td>Adaptive-28</td><td>Stop when sum ≥ 28 with a WORM. Mid-range aggression.</td></tr>
+      <tr><td>Adaptive-31</td><td>Stop when sum ≥ 31 with a WORM. Aims for the top tier.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script src="sim.js"></script>
+<script>
+const STRAT_KEYS = Object.keys(STRATEGIES);
+const picks = new Set(['Greedy', 'Safe', 'Adaptive28']);
+
+function buildChips() {
+  const container = document.getElementById('stratPicks');
+  container.innerHTML = '';
+  STRAT_KEYS.forEach(k => {
+    const chip = document.createElement('div');
+    chip.className = 'strategy-chip' + (picks.has(k) ? ' active' : '');
+    chip.textContent = STRATEGIES[k].name;
+    chip.addEventListener('click', () => {
+      if (picks.has(k) && picks.size > 2) { picks.delete(k); chip.classList.remove('active'); }
+      else if (!picks.has(k) && picks.size < 6) { picks.add(k); chip.classList.add('active'); }
+    });
+    container.appendChild(chip);
+  });
+}
+buildChips();
+
+const playersSlider = document.getElementById('players');
+const playersVal = document.getElementById('playersVal');
+playersSlider.addEventListener('input', () => { playersVal.textContent = playersSlider.value; });
+
+document.getElementById('run').addEventListener('click', async () => {
+  const btn = document.getElementById('run');
+  const progress = document.getElementById('progress');
+  btn.disabled = true;
+  progress.textContent = 'Running…';
+
+  const nGames = +document.getElementById('nGames').value;
+  const nPlayers = +document.getElementById('players').value;
+
+  const stratKeys = [...picks];
+  // Pad or rotate strategies to fill nPlayers seats
+  const playerStrats = [];
+  for (let i = 0; i < nPlayers; i++) playerStrats.push(STRATEGIES[stratKeys[i % stratKeys.length]]);
+
+  await new Promise(r => setTimeout(r, 20)); // let UI breathe
+
+  // Run in chunks so the page doesn't freeze
+  const chunkSize = 200;
+  const allResults = playerStrats.map(() => ({ wins: 0, totalWorms: 0, totalBusts: 0, totalTurns: 0 }));
+  let gamesRun = 0;
+
+  function chunk() {
+    return new Promise(resolve => {
+      setTimeout(() => {
+        const end = Math.min(gamesRun + chunkSize, nGames);
+        for (let g = gamesRun; g < end; g++) {
+          const { finalWorms, stats } = runGame(playerStrats.map(s => s.fn));
+          const maxW = Math.max(...finalWorms);
+          finalWorms.forEach((w, i) => {
+            if (w === maxW) allResults[i].wins++;
+            allResults[i].totalWorms += w;
+            allResults[i].totalBusts += stats[i].busts;
+            allResults[i].totalTurns += stats[i].turns;
+          });
+        }
+        gamesRun = end;
+        resolve();
+      }, 0);
+    });
+  }
+
+  while (gamesRun < nGames) {
+    await chunk();
+    progress.textContent = `Running… ${Math.round(gamesRun / nGames * 100)}%`;
+  }
+
+  // Aggregate by strategy name (multiple seats may share a strategy)
+  const aggByName = {};
+  playerStrats.forEach((s, i) => {
+    const n = s.name;
+    if (!aggByName[n]) aggByName[n] = { wins: 0, totalWorms: 0, totalBusts: 0, totalTurns: 0, seats: 0 };
+    aggByName[n].wins += allResults[i].wins;
+    aggByName[n].totalWorms += allResults[i].totalWorms;
+    aggByName[n].totalBusts += allResults[i].totalBusts;
+    aggByName[n].totalTurns += allResults[i].totalTurns;
+    aggByName[n].seats++;
+  });
+
+  const rows = Object.entries(aggByName).map(([name, r]) => ({
+    name,
+    winRate: (r.wins / (nGames * r.seats) * 100).toFixed(1),
+    avgWorms: (r.totalWorms / (nGames * r.seats)).toFixed(2),
+    bustRate: (r.totalBusts / r.totalTurns * 100).toFixed(1),
+  })).sort((a, b) => b.winRate - a.winRate);
+
+  const maxWinRate = Math.max(...rows.map(r => +r.winRate));
+  const tbody = document.getElementById('resultBody');
+  tbody.innerHTML = '';
+  rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    if (i === 0) tr.className = 'winner';
+    const pct = (+r.winRate / maxWinRate * 100).toFixed(1);
+    tr.innerHTML = `
+      <td>${r.name}</td>
+      <td>${r.winRate}%</td>
+      <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill${i===0?' green':''}" style="width:${pct}%"></div></div></td>
+      <td>${r.avgWorms} 🪱</td>
+      <td>${r.bustRate}%</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('resultMeta').textContent =
+    `${nGames.toLocaleString()} games · ${nPlayers} players · strategies rotate across seats`;
+  document.getElementById('results').style.display = '';
+  progress.textContent = 'Done.';
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>
