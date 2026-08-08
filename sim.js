@@ -1,4 +1,4 @@
-// Pickomino Monte Carlo simulation engine
+// Pickomino simulation engine
 
 const WORM = 'W';
 const FACES = [1, 2, 3, 4, 5, WORM];
@@ -18,24 +18,6 @@ function groupByFace(dice) {
   return groups;
 }
 
-// Tile pool management
-function makeTilePool() {
-  const pool = {};
-  for (let t = 21; t <= 36; t++) pool[t] = true;
-  return pool;
-}
-
-function availableTiles(pool) {
-  return Object.keys(pool).map(Number).filter(t => pool[t]).sort((a, b) => a - b);
-}
-
-function bestTileForSum(pool, sum) {
-  const tiles = availableTiles(pool);
-  // exact match first, then highest below
-  const candidates = tiles.filter(t => t <= sum);
-  return candidates.length ? candidates[candidates.length - 1] : null;
-}
-
 function wormCount(tile) {
   if (tile <= 24) return 1;
   if (tile <= 28) return 2;
@@ -43,196 +25,155 @@ function wormCount(tile) {
   return 4;
 }
 
-// Strategy implementations
-// Each strategy returns which face to pick (or null to stop)
-// signature: strategy(currentSum, usedFaces, dice, pool, playerStacks)
-
-function stratGreedy(currentSum, usedFaces, dice, pool, playerStacks) {
-  const groups = groupByFace(dice);
-  let best = null, bestGain = -1;
-  for (const face of Object.keys(groups)) {
-    if (usedFaces.has(face)) continue;
-    const gain = faceValue(face) * groups[face];
-    if (gain > bestGain) { bestGain = gain; best = face; }
-  }
-  return best; // always roll on
+// Full tile pool (all tiles available — for per-turn independent analysis)
+function fullPool() {
+  const pool = {};
+  for (let t = 21; t <= 36; t++) pool[t] = true;
+  return pool;
 }
 
-function stratSafe(currentSum, usedFaces, dice, pool, playerStacks) {
-  const groups = groupByFace(dice);
-  const hasWorm = usedFaces.has(WORM);
-  const diceLeft = dice.length;
-
-  // Prioritise WORM if not secured
-  if (!hasWorm && groups[WORM]) return WORM;
-
-  // Stop if we have a WORM, a valid tile, and few dice remain
-  if (hasWorm && diceLeft <= 3 && bestTileForSum(pool, currentSum) !== null) return null;
-
-  // Otherwise pick best gain
-  let best = null, bestGain = -1;
-  for (const face of Object.keys(groups)) {
-    if (usedFaces.has(face)) continue;
-    const gain = faceValue(face) * groups[face];
-    if (gain > bestGain) { bestGain = gain; best = face; }
-  }
-  return best;
+function bestTileForSum(pool, sum) {
+  const tiles = Object.keys(pool).map(Number).filter(t => pool[t] && t <= sum);
+  return tiles.length ? Math.max(...tiles) : null;
 }
 
-function stratTarget21(currentSum, usedFaces, dice, pool, playerStacks) {
-  const groups = groupByFace(dice);
-  const hasWorm = usedFaces.has(WORM);
-
-  if (!hasWorm && groups[WORM]) return WORM;
-  if (hasWorm && currentSum >= 21 && bestTileForSum(pool, currentSum) !== null) return null;
-
-  let best = null, bestGain = -1;
-  for (const face of Object.keys(groups)) {
-    if (usedFaces.has(face)) continue;
-    const gain = faceValue(face) * groups[face];
-    if (gain > bestGain) { bestGain = gain; best = face; }
-  }
-  return best;
+// Serialize a combination map for use as a Map key
+// combination = { '1': 2, '5': 1, 'W': 3 } → "🪱×3 · 5×1 · 1×2"
+function serializeCombination(combo) {
+  const faceOrder = [WORM, 5, 4, 3, 2, 1];
+  return faceOrder
+    .filter(f => combo[f])
+    .map(f => `${f === WORM ? '🪱' : f}×${combo[f]}`)
+    .join(' · ');
 }
 
-function makeAdaptive(threshold) {
-  return function stratAdaptive(currentSum, usedFaces, dice, pool, playerStacks) {
-    const groups = groupByFace(dice);
-    const hasWorm = usedFaces.has(WORM);
-
-    if (!hasWorm && groups[WORM]) return WORM;
-    if (hasWorm && currentSum >= threshold && bestTileForSum(pool, currentSum) !== null) return null;
-
-    let best = null, bestGain = -1;
-    for (const face of Object.keys(groups)) {
-      if (usedFaces.has(face)) continue;
-      const gain = faceValue(face) * groups[face];
-      if (gain > bestGain) { bestGain = gain; best = face; }
-    }
-    return best;
-  };
-}
-
-// Play one turn; returns { tile: number|null, busted: bool }
-function playTurn(strategy, pool, playerStacks, playerIdx) {
+// Play one independent turn, record the dice combination set aside.
+// Returns { busted, tile, combination, sum }
+// strategy: function(currentSum, usedFaces, dice, pool) → face to pick, or null to stop
+function playTurnRecorded(strategy) {
+  const pool = fullPool();
   let diceCount = 8;
   let currentSum = 0;
   const usedFaces = new Set();
+  const combination = {}; // face → total count kept
 
   while (diceCount > 0) {
     const dice = rollDice(diceCount);
     const groups = groupByFace(dice);
 
-    // Filter to available faces
-    const available = Object.keys(groups).filter(f => !usedFaces.has(f));
-    if (available.length === 0) return { tile: null, busted: true };
+    const available = Object.keys(groups).filter(f => !usedFaces.has(f) && !usedFaces.has(Number(f)));
+    if (available.length === 0) return { busted: true, tile: null, combination, sum: currentSum };
 
-    const chosen = strategy(currentSum, usedFaces, dice, pool, playerStacks);
+    const chosen = strategy(currentSum, usedFaces, dice, pool);
     if (chosen === null) break; // voluntarily stop
 
-    if (!available.includes(String(chosen)) && !available.includes(chosen)) {
-      // strategy tried to pick unavailable face — bust
-      return { tile: null, busted: true };
-    }
+    // Normalise chosen (strategy may return string or number)
+    const chosenKey = chosen === WORM || chosen === 'W' ? WORM : Number(chosen);
+    const groupKey = groups[chosenKey] !== undefined ? chosenKey : String(chosenKey);
 
-    usedFaces.add(chosen);
-    currentSum += faceValue(chosen) * groups[chosen];
-    diceCount -= groups[chosen];
+    if (!groups[groupKey] && !groups[chosenKey]) return { busted: true, tile: null, combination, sum: currentSum };
+
+    const count = groups[groupKey] || groups[chosenKey];
+    usedFaces.add(chosenKey);
+    combination[chosenKey] = (combination[chosenKey] || 0) + count;
+    currentSum += faceValue(chosenKey) * count;
+    diceCount -= count;
   }
 
-  if (!usedFaces.has(WORM)) return { tile: null, busted: true };
-
-  // Check steal
-  for (let i = 0; i < playerStacks.length; i++) {
-    if (i === playerIdx) continue;
-    const stack = playerStacks[i];
-    if (stack.length && stack[stack.length - 1] === currentSum) {
-      return { tile: currentSum, stolen: true, stolenFrom: i };
-    }
-  }
+  if (!usedFaces.has(WORM)) return { busted: true, tile: null, combination, sum: currentSum };
 
   const tile = bestTileForSum(pool, currentSum);
-  return { tile, busted: tile === null };
+  return { busted: tile === null, tile, combination, sum: currentSum };
 }
 
-// Run one full game; returns array of worm totals per player
-function runGame(strategies) {
-  const n = strategies.length;
-  const pool = makeTilePool();
-  const stacks = strategies.map(() => []);
-  const stats = strategies.map(() => ({ turns: 0, busts: 0, tilesWon: 0, wormsWon: 0 }));
+// --- Strategies ---
 
-  let gameOver = false;
-  while (!gameOver) {
-    for (let i = 0; i < n && !gameOver; i++) {
-      stats[i].turns++;
-      const result = playTurn(strategies[i], pool, stacks, i);
+function stratGreedy(currentSum, usedFaces, dice) {
+  const groups = groupByFace(dice);
+  let best = null, bestGain = -1;
+  for (const face of Object.keys(groups)) {
+    const f = face === 'W' ? WORM : Number(face);
+    if (usedFaces.has(f)) continue;
+    const gain = faceValue(f) * groups[face];
+    if (gain > bestGain) { bestGain = gain; best = f; }
+  }
+  return best;
+}
 
-      if (result.busted) {
-        stats[i].busts++;
-        // Return top tile
-        if (stacks[i].length) {
-          const lost = stacks[i].pop();
-          pool[lost] = true;
-        }
-        // Remove highest face-up tile
-        const tiles = availableTiles(pool);
-        if (tiles.length) {
-          delete pool[tiles[tiles.length - 1]];
-        }
-      } else if (result.tile) {
-        if (result.stolen) {
-          const fromStack = stacks[result.stolenFrom];
-          fromStack.pop();
-          stacks[i].push(result.tile);
-        } else {
-          pool[result.tile] = false;
-          stacks[i].push(result.tile);
-        }
-        stats[i].tilesWon++;
-        stats[i].wormsWon += wormCount(result.tile);
-      }
+function stratSafe(currentSum, usedFaces, dice, pool) {
+  const groups = groupByFace(dice);
+  const hasWorm = usedFaces.has(WORM);
+  const diceLeft = dice.length;
 
-      if (availableTiles(pool).length === 0) { gameOver = true; break; }
+  if (!hasWorm && (groups[WORM] || groups['W'])) return WORM;
+  if (hasWorm && diceLeft <= 3 && bestTileForSum(pool, currentSum) !== null) return null;
+
+  let best = null, bestGain = -1;
+  for (const face of Object.keys(groups)) {
+    const f = face === 'W' ? WORM : Number(face);
+    if (usedFaces.has(f)) continue;
+    const gain = faceValue(f) * groups[face];
+    if (gain > bestGain) { bestGain = gain; best = f; }
+  }
+  return best;
+}
+
+function makeAdaptive(threshold) {
+  return function(currentSum, usedFaces, dice, pool) {
+    const groups = groupByFace(dice);
+    const hasWorm = usedFaces.has(WORM);
+
+    if (!hasWorm && (groups[WORM] || groups['W'])) return WORM;
+    if (hasWorm && currentSum >= threshold && bestTileForSum(pool, currentSum) !== null) return null;
+
+    let best = null, bestGain = -1;
+    for (const face of Object.keys(groups)) {
+      const f = face === 'W' ? WORM : Number(face);
+      if (usedFaces.has(f)) continue;
+      const gain = faceValue(f) * groups[face];
+      if (gain > bestGain) { bestGain = gain; best = f; }
+    }
+    return best;
+  };
+}
+
+const STRATEGIES = {
+  Greedy:     { name: 'Greedy',       fn: stratGreedy },
+  Safe:       { name: 'Safe',         fn: stratSafe },
+  Adaptive25: { name: 'Adaptatif-25', fn: makeAdaptive(25) },
+  Adaptive28: { name: 'Adaptatif-28', fn: makeAdaptive(28) },
+  Adaptive31: { name: 'Adaptatif-31', fn: makeAdaptive(31) },
+};
+
+// Run N independent turns, return full log + per-tile top combinations
+function runAnalysis(strategy, nRounds) {
+  let successes = 0, failures = 0;
+  // Per-tile: Map<tile, Map<comboKey, {label, count}>>
+  const tileCombos = {};
+  for (let t = 21; t <= 36; t++) tileCombos[t] = {};
+
+  for (let i = 0; i < nRounds; i++) {
+    const result = playTurnRecorded(strategy);
+    if (result.busted || !result.tile) {
+      failures++;
+    } else {
+      successes++;
+      const key = serializeCombination(result.combination);
+      const tile = result.tile;
+      if (!tileCombos[tile][key]) tileCombos[tile][key] = { label: key, count: 0, sum: result.sum };
+      tileCombos[tile][key].count++;
     }
   }
 
-  const finalWorms = stacks.map(s => s.reduce((a, t) => a + wormCount(t), 0));
-  return { finalWorms, stats };
-}
-
-// Monte Carlo: compare strategies over N games
-function monteCarlo(strategyDefs, nGames) {
-  const results = strategyDefs.map(() => ({ wins: 0, totalWorms: 0, totalBusts: 0, totalTurns: 0 }));
-
-  for (let g = 0; g < nGames; g++) {
-    const { finalWorms, stats } = runGame(strategyDefs.map(s => s.fn));
-    const maxWorms = Math.max(...finalWorms);
-    finalWorms.forEach((w, i) => {
-      if (w === maxWorms) results[i].wins++;
-      results[i].totalWorms += w;
-      results[i].totalBusts += stats[i].busts;
-      results[i].totalTurns += stats[i].turns;
-    });
+  // Top 10 per tile
+  const topByTile = {};
+  for (let t = 21; t <= 36; t++) {
+    topByTile[t] = Object.values(tileCombos[t])
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
   }
 
-  return results.map((r, i) => ({
-    name: strategyDefs[i].name,
-    winRate: (r.wins / nGames * 100).toFixed(1),
-    avgWorms: (r.totalWorms / nGames).toFixed(2),
-    bustRate: (r.totalBusts / r.totalTurns * 100).toFixed(1),
-  }));
+  return { nRounds, successes, failures, topByTile };
 }
 
-// Available named strategies
-const STRATEGIES = {
-  Greedy:     { name: 'Greedy',      fn: stratGreedy },
-  Safe:       { name: 'Safe',        fn: stratSafe },
-  Target21:   { name: 'Target-21',   fn: stratTarget21 },
-  Adaptive25: { name: 'Adaptive-25', fn: makeAdaptive(25) },
-  Adaptive28: { name: 'Adaptive-28', fn: makeAdaptive(28) },
-  Adaptive31: { name: 'Adaptive-31', fn: makeAdaptive(31) },
-};
-
-// Export for browser and Node
-if (typeof module !== 'undefined') module.exports = { monteCarlo, STRATEGIES };
+if (typeof module !== 'undefined') module.exports = { runAnalysis, STRATEGIES, serializeCombination };
