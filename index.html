@@ -3,242 +3,220 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pikl — Simulateur Monte Carlo Pickomino</title>
+<title>Pikl — Analyse des lancers Pickomino</title>
 <style>
   :root {
     --bg: #1a1a2e; --surface: #16213e; --accent: #e94560;
     --text: #eaeaea; --muted: #888; --border: #2a2a4a;
-    --green: #4caf50; --yellow: #ffc107;
+    --green: #4caf50; --yellow: #ffc107; --blue: #4fc3f7;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; padding: 2rem; min-height: 100vh; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; padding: 2rem; }
   h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: .25rem; }
   .subtitle { color: var(--muted); font-size: .9rem; margin-bottom: 2rem; }
   .subtitle a { color: var(--yellow); }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
   h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--yellow); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
-  label { font-size: .85rem; color: var(--muted); display: block; margin-bottom: .3rem; }
-  select, input[type=range], input[type=number] {
-    width: 100%; background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 4px; padding: .4rem .6rem; font-size: .9rem;
+  .row { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-end; }
+  label { font-size: .85rem; color: var(--muted); display: block; margin-bottom: .35rem; }
+  select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: .4rem .7rem; font-size: .9rem;
   }
-  .strategy-picks { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
-  .strategy-chip {
-    display: inline-flex; align-items: center; gap: .4rem;
-    background: var(--bg); border: 1px solid var(--border);
-    border-radius: 20px; padding: .3rem .8rem; font-size: .85rem; cursor: pointer;
-    transition: border-color .2s, color .2s;
-  }
-  .strategy-chip.active { border-color: var(--accent); color: var(--accent); }
-  .strategy-chip input { display: none; }
   button#run {
     background: var(--accent); color: #fff; border: none; border-radius: 6px;
-    padding: .7rem 2rem; font-size: 1rem; cursor: pointer; margin-top: .5rem;
-    transition: opacity .2s;
+    padding: .6rem 1.8rem; font-size: 1rem; cursor: pointer; transition: opacity .2s;
   }
   button#run:disabled { opacity: .5; cursor: not-allowed; }
-  #progress { margin-top: .8rem; color: var(--muted); font-size: .85rem; min-height: 1.2em; }
-  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-  th { text-align: left; color: var(--muted); font-weight: 500; padding: .5rem .7rem; border-bottom: 1px solid var(--border); }
-  td { padding: .55rem .7rem; border-bottom: 1px solid var(--border); }
-  tr:last-child td { border-bottom: none; }
-  .winner td:first-child::before { content: '🏆 '; }
-  .bar-cell { width: 35%; }
-  .bar-wrap { background: var(--border); border-radius: 3px; height: 10px; overflow: hidden; }
-  .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .5s; }
-  .bar-fill.green { background: var(--green); }
+  #progress { color: var(--muted); font-size: .85rem; min-height: 1.2em; margin-top: .5rem; }
+
+  /* Summary stats */
+  .stats { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .stat { text-align: center; }
+  .stat .val { font-size: 1.8rem; font-weight: 700; color: var(--blue); }
+  .stat .lbl { font-size: .75rem; color: var(--muted); margin-top: .1rem; }
+  .stat.green .val { color: var(--green); }
+  .stat.red .val { color: var(--accent); }
+
+  /* Tile grid */
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+  .tile-card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 1rem;
+  }
+  .tile-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: .6rem;
+  }
+  .tile-num { font-size: 1.1rem; font-weight: 700; color: var(--yellow); }
+  .tile-worms { font-size: .8rem; color: var(--muted); }
+  .tile-wins { font-size: .8rem; color: var(--green); }
+  table.combo { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  table.combo th { color: var(--muted); font-weight: 500; padding: .25rem .4rem; border-bottom: 1px solid var(--border); text-align: left; }
+  table.combo td { padding: .25rem .4rem; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  table.combo tr:last-child td { border-bottom: none; }
+  .no-data { color: var(--muted); font-size: .8rem; font-style: italic; }
+  .bar-sm { display: inline-block; background: var(--accent); height: 6px; border-radius: 3px; vertical-align: middle; margin-left: 4px; }
+
   #results { display: none; }
-  .meta { font-size: .78rem; color: var(--muted); margin-top: .5rem; }
   @media (max-width: 600px) { body { padding: 1rem; } }
 </style>
 </head>
 <body>
-<h1>🪱 Pikl — Simulateur Pickomino</h1>
-<p class="subtitle">Comparaison de stratégies par Monte Carlo · <a href="https://github.com/kelu124/pikl" target="_blank">kelu124/pikl</a></p>
+
+<h1>🪱 Pikl — Analyse des lancers</h1>
+<p class="subtitle">1 joueur · lancers indépendants · combinaisons gagnantes par tuile · <a href="https://github.com/kelu124/pikl" target="_blank">kelu124/pikl</a></p>
 
 <div class="card">
   <h2>Configuration</h2>
-  <div class="grid">
+  <div class="row">
     <div>
-      <label>Stratégies à comparer (choisir 2 à 6)</label>
-      <div class="strategy-picks" id="stratPicks"></div>
-    </div>
-    <div>
-      <label>Joueurs par partie : <span id="playersVal">4</span></label>
-      <input type="range" id="players" min="2" max="6" value="4">
-    </div>
-    <div>
-      <label>Nombre de simulations</label>
-      <select id="nGames">
-        <option value="500">500 (rapide)</option>
-        <option value="2000" selected>2 000</option>
-        <option value="10000">10 000 (lent)</option>
-        <option value="50000">50 000 (très lent)</option>
+      <label>Stratégie d'arrêt</label>
+      <select id="strategy">
+        <option value="Greedy">Greedy — relancer jusqu'à l'échec</option>
+        <option value="Safe">Safe — sécuriser un VER, s'arrêter tôt</option>
+        <option value="Adaptive25">Adaptatif-25 — s'arrêter à ≥ 25</option>
+        <option value="Adaptive28" selected>Adaptatif-28 — s'arrêter à ≥ 28</option>
+        <option value="Adaptive31">Adaptatif-31 — s'arrêter à ≥ 31</option>
       </select>
     </div>
+    <div>
+      <label>Nombre de lancers</label>
+      <select id="nRounds">
+        <option value="1000">1 000</option>
+        <option value="5000" selected>5 000</option>
+        <option value="20000">20 000</option>
+        <option value="100000">100 000 (lent)</option>
+      </select>
+    </div>
+    <div>
+      <button id="run">Lancer l'analyse</button>
+    </div>
   </div>
-  <button id="run">Lancer la simulation</button>
   <div id="progress"></div>
 </div>
 
-<div class="card" id="results">
-  <h2>Résultats</h2>
-  <table id="resultTable">
-    <thead><tr>
-      <th>Stratégie</th>
-      <th>Taux de victoire</th>
-      <th class="bar-cell"></th>
-      <th>Vers moy.</th>
-      <th>Taux d'échec</th>
-    </tr></thead>
-    <tbody id="resultBody"></tbody>
-  </table>
-  <p class="meta" id="resultMeta"></p>
-</div>
+<div id="results">
+  <div class="card">
+    <h2>Résumé</h2>
+    <div class="stats">
+      <div class="stat"><div class="val" id="statTotal">—</div><div class="lbl">lancers</div></div>
+      <div class="stat green"><div class="val" id="statSuccess">—</div><div class="lbl">réussis</div></div>
+      <div class="stat red"><div class="val" id="statFail">—</div><div class="lbl">échecs</div></div>
+      <div class="stat"><div class="val" id="statRate">—</div><div class="lbl">taux de réussite</div></div>
+    </div>
+  </div>
 
-<div class="card">
-  <h2>Référence des stratégies</h2>
-  <table>
-    <thead><tr><th>Nom</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td>Greedy</td><td>Toujours choisir la face rapportant le plus de points. Relancer jusqu'à l'échec.</td></tr>
-      <tr><td>Safe</td><td>Sécuriser un VER en premier, puis s'arrêter avec ≤ 3 dés restants si la somme est valide.</td></tr>
-      <tr><td>Cible-21</td><td>S'arrêter dès que la somme ≥ 21 avec un VER sécurisé.</td></tr>
-      <tr><td>Adaptatif-25</td><td>S'arrêter quand la somme ≥ 25 avec un VER. Bon équilibre risque/récompense.</td></tr>
-      <tr><td>Adaptatif-28</td><td>S'arrêter quand la somme ≥ 28 avec un VER. Agressivité modérée.</td></tr>
-      <tr><td>Adaptatif-31</td><td>S'arrêter quand la somme ≥ 31 avec un VER. Vise les tuiles hautes.</td></tr>
-    </tbody>
-  </table>
-</div>
-
-<div class="card">
-  <h2>Règles du jeu</h2>
-  <table>
-    <thead><tr><th>Élément</th><th>Détail</th></tr></thead>
-    <tbody>
-      <tr><td>Dés</td><td>8 dés, faces : 1 · 2 · 3 · 4 · 5 · 🪱 (VER = 5 points)</td></tr>
-      <tr><td>Tuiles</td><td>21–36 · tuiles 21–24 = 1 ver · 25–28 = 2 vers · 29–32 = 3 vers · 33–36 = 4 vers</td></tr>
-      <tr><td>Tour</td><td>Lancer tous les dés → mettre de côté une valeur → relancer → répéter ou s'arrêter</td></tr>
-      <tr><td>Condition</td><td>Au moins un VER mis de côté pour prendre une tuile</td></tr>
-      <tr><td>Vol</td><td>Si votre somme correspond exactement à la tuile du dessus d'un adversaire, volez-la</td></tr>
-      <tr><td>Échec</td><td>Vous perdez votre tuile du dessus · la tuile centrale la plus haute est retirée définitivement</td></tr>
-    </tbody>
-  </table>
+  <div class="card">
+    <h2>Top 10 combinaisons par tuile</h2>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:1rem;">
+      Tuile obtenue · combinaison de dés mis de côté · fréquence sur les lancers gagnants de cette tuile.
+    </p>
+    <div class="tile-grid" id="tileGrid"></div>
+  </div>
 </div>
 
 <script src="sim.js"></script>
 <script>
-const STRAT_KEYS = Object.keys(STRATEGIES);
-const picks = new Set(['Greedy', 'Safe', 'Adaptive28']);
-const STRAT_LABELS = {
-  Greedy: 'Greedy', Safe: 'Safe', Target21: 'Cible-21',
-  Adaptive25: 'Adaptatif-25', Adaptive28: 'Adaptatif-28', Adaptive31: 'Adaptatif-31'
-};
+const btn = document.getElementById('run');
+const progress = document.getElementById('progress');
 
-function buildChips() {
-  const container = document.getElementById('stratPicks');
-  container.innerHTML = '';
-  STRAT_KEYS.forEach(k => {
-    const chip = document.createElement('div');
-    chip.className = 'strategy-chip' + (picks.has(k) ? ' active' : '');
-    chip.textContent = STRAT_LABELS[k] || k;
-    chip.addEventListener('click', () => {
-      if (picks.has(k) && picks.size > 2) { picks.delete(k); chip.classList.remove('active'); }
-      else if (!picks.has(k) && picks.size < 6) { picks.add(k); chip.classList.add('active'); }
-    });
-    container.appendChild(chip);
-  });
-}
-buildChips();
-
-const playersSlider = document.getElementById('players');
-const playersVal = document.getElementById('playersVal');
-playersSlider.addEventListener('input', () => { playersVal.textContent = playersSlider.value; });
-
-document.getElementById('run').addEventListener('click', async () => {
-  const btn = document.getElementById('run');
-  const progress = document.getElementById('progress');
+btn.addEventListener('click', async () => {
   btn.disabled = true;
-  progress.textContent = 'Calcul en cours…';
+  progress.textContent = 'Analyse en cours…';
 
-  const nGames = +document.getElementById('nGames').value;
-  const nPlayers = +document.getElementById('players').value;
-
-  const stratKeys = [...picks];
-  const playerStrats = [];
-  for (let i = 0; i < nPlayers; i++) playerStrats.push(STRATEGIES[stratKeys[i % stratKeys.length]]);
+  const stratKey = document.getElementById('strategy').value;
+  const nRounds = +document.getElementById('nRounds').value;
+  const strategy = STRATEGIES[stratKey].fn;
 
   await new Promise(r => setTimeout(r, 20));
 
-  const chunkSize = 200;
-  const allResults = playerStrats.map(() => ({ wins: 0, totalWorms: 0, totalBusts: 0, totalTurns: 0 }));
-  let gamesRun = 0;
+  // Run in chunks
+  const CHUNK = 500;
+  let done = 0;
+  let successes = 0, failures = 0;
+  const tileCombos = {};
+  for (let t = 21; t <= 36; t++) tileCombos[t] = {};
 
   function chunk() {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const end = Math.min(gamesRun + chunkSize, nGames);
-        for (let g = gamesRun; g < end; g++) {
-          const { finalWorms, stats } = runGame(playerStrats.map(s => s.fn));
-          const maxW = Math.max(...finalWorms);
-          finalWorms.forEach((w, i) => {
-            if (w === maxW) allResults[i].wins++;
-            allResults[i].totalWorms += w;
-            allResults[i].totalBusts += stats[i].busts;
-            allResults[i].totalTurns += stats[i].turns;
-          });
+    return new Promise(resolve => setTimeout(() => {
+      const end = Math.min(done + CHUNK, nRounds);
+      for (let i = done; i < end; i++) {
+        const r = playTurnRecorded(strategy);
+        if (r.busted || !r.tile) {
+          failures++;
+        } else {
+          successes++;
+          const key = serializeCombination(r.combination);
+          if (!tileCombos[r.tile][key]) tileCombos[r.tile][key] = { label: key, count: 0 };
+          tileCombos[r.tile][key].count++;
         }
-        gamesRun = end;
-        resolve();
-      }, 0);
-    });
+      }
+      done = end;
+      resolve();
+    }, 0));
   }
 
-  while (gamesRun < nGames) {
+  while (done < nRounds) {
     await chunk();
-    progress.textContent = `Calcul en cours… ${Math.round(gamesRun / nGames * 100)} %`;
+    progress.textContent = `Analyse en cours… ${Math.round(done / nRounds * 100)} %`;
   }
 
-  const aggByName = {};
-  playerStrats.forEach((s, i) => {
-    const n = s.name;
-    if (!aggByName[n]) aggByName[n] = { wins: 0, totalWorms: 0, totalBusts: 0, totalTurns: 0, seats: 0 };
-    aggByName[n].wins += allResults[i].wins;
-    aggByName[n].totalWorms += allResults[i].totalWorms;
-    aggByName[n].totalBusts += allResults[i].totalBusts;
-    aggByName[n].totalTurns += allResults[i].totalTurns;
-    aggByName[n].seats++;
-  });
+  // Render summary
+  const rate = (successes / nRounds * 100).toFixed(1);
+  document.getElementById('statTotal').textContent = nRounds.toLocaleString('fr-FR');
+  document.getElementById('statSuccess').textContent = successes.toLocaleString('fr-FR');
+  document.getElementById('statFail').textContent = failures.toLocaleString('fr-FR');
+  document.getElementById('statRate').textContent = rate + ' %';
 
-  const rows = Object.entries(aggByName).map(([name, r]) => ({
-    name,
-    winRate: (r.wins / (nGames * r.seats) * 100).toFixed(1),
-    avgWorms: (r.totalWorms / (nGames * r.seats)).toFixed(2),
-    bustRate: (r.totalBusts / r.totalTurns * 100).toFixed(1),
-  })).sort((a, b) => b.winRate - a.winRate);
+  // Render tile cards
+  const wormLabels = { 1:'🪱', 2:'🪱🪱', 3:'🪱🪱🪱', 4:'🪱🪱🪱🪱' };
+  function wormCount(t) { return t<=24?1:t<=28?2:t<=32?3:4; }
 
-  const maxWinRate = Math.max(...rows.map(r => +r.winRate));
-  const tbody = document.getElementById('resultBody');
-  tbody.innerHTML = '';
-  rows.forEach((r, i) => {
-    const tr = document.createElement('tr');
-    if (i === 0) tr.className = 'winner';
-    const pct = (+r.winRate / maxWinRate * 100).toFixed(1);
-    tr.innerHTML = `
-      <td>${STRAT_LABELS[Object.keys(STRAT_LABELS).find(k => STRATEGIES[k]?.name === r.name)] || r.name}</td>
-      <td>${r.winRate} %</td>
-      <td class="bar-cell"><div class="bar-wrap"><div class="bar-fill${i===0?' green':''}" style="width:${pct}%"></div></div></td>
-      <td>${r.avgWorms} 🪱</td>
-      <td>${r.bustRate} %</td>
-    `;
-    tbody.appendChild(tr);
-  });
+  const grid = document.getElementById('tileGrid');
+  grid.innerHTML = '';
 
-  document.getElementById('resultMeta').textContent =
-    `${nGames.toLocaleString()} parties · ${nPlayers} joueurs · les stratégies tournent entre les sièges`;
+  for (let t = 21; t <= 36; t++) {
+    const top10 = Object.values(tileCombos[t]).sort((a,b) => b.count - a.count).slice(0, 10);
+    const totalWins = top10.reduce((s, x) => s + x.count, 0);
+    const allWins = Object.values(tileCombos[t]).reduce((s, x) => s + x.count, 0);
+
+    const card = document.createElement('div');
+    card.className = 'tile-card';
+
+    const header = `
+      <div class="tile-header">
+        <span class="tile-num">Tuile ${t}</span>
+        <span class="tile-worms">${wormLabels[wormCount(t)]}</span>
+        <span class="tile-wins">${allWins} victoire${allWins !== 1 ? 's' : ''}</span>
+      </div>`;
+
+    let body = '';
+    if (top10.length === 0) {
+      body = '<span class="no-data">Aucun lancer réussi</span>';
+    } else {
+      const maxCount = top10[0].count;
+      body = `<table class="combo">
+        <thead><tr><th>#</th><th>Combinaison</th><th>Fois</th><th>%</th></tr></thead>
+        <tbody>`;
+      top10.forEach((row, i) => {
+        const pct = allWins ? (row.count / allWins * 100).toFixed(1) : '0.0';
+        const barW = Math.round(row.count / maxCount * 60);
+        body += `<tr>
+          <td style="color:var(--muted)">${i+1}</td>
+          <td>${row.label}</td>
+          <td>${row.count}<span class="bar-sm" style="width:${barW}px"></span></td>
+          <td style="color:var(--muted)">${pct} %</td>
+        </tr>`;
+      });
+      body += '</tbody></table>';
+    }
+
+    card.innerHTML = header + body;
+    grid.appendChild(card);
+  }
+
   document.getElementById('results').style.display = '';
-  progress.textContent = 'Terminé.';
+  progress.textContent = `Terminé — ${nRounds.toLocaleString('fr-FR')} lancers analysés.`;
   btn.disabled = false;
 });
 </script>
