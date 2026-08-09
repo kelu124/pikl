@@ -58,6 +58,12 @@
   .bar-sm { display: inline-block; background: var(--accent); height: 6px; border-radius: 3px; vertical-align: middle; margin-left: 4px; }
 
   #results { display: none; }
+  .strat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+  .strat-card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; }
+  .strat-name { font-size: 1rem; font-weight: 700; color: var(--accent); margin-bottom: .5rem; }
+  .strat-card p { font-size: .85rem; line-height: 1.5; color: var(--text); margin-bottom: .5rem; }
+  .strat-card p:last-child { margin-bottom: 0; }
+  .strat-tag { color: var(--muted) !important; font-style: italic; font-size: .8rem !important; }
   @media (max-width: 600px) { body { padding: 1rem; } }
 </style>
 </head>
@@ -93,6 +99,48 @@
     </div>
   </div>
   <div id="progress"></div>
+</div>
+
+<div class="card">
+  <h2>Stratégies</h2>
+  <div class="strat-grid">
+
+    <div class="strat-card">
+      <div class="strat-name">Greedy</div>
+      <p>À chaque lancer, choisit toujours la valeur de face qui maximise le gain immédiat (nombre de dés × valeur). Continue à relancer jusqu'à ce qu'il n'y ait plus de face disponible ou que tous les dés soient posés. Ne s'arrête jamais volontairement.</p>
+      <p><strong>Points forts :</strong> capture les tuiles élevées (29–36) quand ça marche. <strong>Point faible :</strong> taux d'échec élevé — il pousse jusqu'à l'effondrement et n'a souvent pas de VER en main.</p>
+      <p class="strat-tag">Usage : tester les limites hautes du jeu, analyser quelles combinaisons atteignent les tuiles rares.</p>
+    </div>
+
+    <div class="strat-card">
+      <div class="strat-name">Safe</div>
+      <p>Priorité absolue au VER dès qu'il apparaît. Une fois le VER sécurisé, s'arrête dès qu'il reste ≤ 3 dés et qu'une tuile valide est accessible. N'essaie pas d'aller plus loin.</p>
+      <p><strong>Points forts :</strong> taux d'échec très bas, flux régulier de petites tuiles. <strong>Point faible :</strong> récolte surtout les tuiles 21–25, accumule peu de vers en valeur absolue.</p>
+      <p class="strat-tag">Usage : référence conservatrice — bon point de comparaison pour évaluer le risque des stratégies agressives.</p>
+    </div>
+
+    <div class="strat-card">
+      <div class="strat-name">Adaptatif-25</div>
+      <p>Priorise le VER dès qu'il est disponible. Arrête le lancer dès que la somme atteint ou dépasse 25 avec au moins un VER. En dessous du seuil, continue à maximiser le gain.</p>
+      <p><strong>Points forts :</strong> bon équilibre — capture régulièrement les tuiles 25–28 (2 vers). <strong>Point faible :</strong> ne vise pas les tuiles hautes, reste en zone médiane.</p>
+      <p class="strat-tag">Usage : bon choix pour analyser la distribution des tuiles à 2 vers.</p>
+    </div>
+
+    <div class="strat-card">
+      <div class="strat-name">Adaptatif-28</div>
+      <p>Identique à Adaptatif-25 mais le seuil d'arrêt est 28. Vise la frontière entre tuiles à 2 et 3 vers — zone de meilleur rendement par risque selon les simulations.</p>
+      <p><strong>Points forts :</strong> capture fréquemment les tuiles 28–32. Taux de réussite raisonnable avec gain moyen élevé. <strong>Point faible :</strong> parfois il manque une tuile et récolte 25–27 à la place.</p>
+      <p class="strat-tag">Usage : stratégie par défaut recommandée — bon point de départ pour explorer les résultats.</p>
+    </div>
+
+    <div class="strat-card">
+      <div class="strat-name">Adaptatif-31</div>
+      <p>Seuil à 31 — vise les tuiles à 4 vers (33–36). Accepte un risque d'échec élevé pour maximiser la valeur de chaque lancer réussi.</p>
+      <p><strong>Points forts :</strong> quand ça passe, la récompense est maximale (3–4 vers). <strong>Point faible :</strong> taux d'échec proche de Greedy — à utiliser quand la situation de jeu justifie la prise de risque.</p>
+      <p class="strat-tag">Usage : analyser les combinaisons rares qui atteignent les tuiles 33–36.</p>
+    </div>
+
+  </div>
 </div>
 
 <div id="results">
